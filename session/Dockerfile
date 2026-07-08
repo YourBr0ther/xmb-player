@@ -81,6 +81,7 @@ RUN groupadd -g 1000 psp && useradd -ms /bin/bash -u 1000 -g 1000 psp && \
 # --- Our components ---
 COPY supervisor/supervisor.py /opt/supervisor/supervisor.py
 COPY retroarch.cfg /opt/retroarch/retroarch.cfg
+COPY pulse-daemon.conf /etc/pulse/daemon.conf.d/99-stream.conf
 COPY entrypoint.sh /etc/entrypoint.sh
 COPY selkies-gstreamer-entrypoint.sh /etc/selkies-gstreamer-entrypoint.sh
 COPY supervisord.conf /etc/supervisord.conf
