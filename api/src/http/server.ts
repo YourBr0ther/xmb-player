@@ -21,10 +21,14 @@ export function createApp(deps: { library: LibraryProvider; session: SessionLike
   const app = express();
   app.use(express.json());
 
-  // Access log: one line per request. Skips the noisy static-asset GETs.
+  // Access log: log state-changing actions and anything that isn't a normal
+  // success. Skips the routine GET /api/session poll and static assets to keep
+  // the log readable.
   app.use((req: Request, res: Response, next: NextFunction) => {
     res.on("finish", () => {
-      if (req.path.startsWith("/api") || req.path === "/turn") {
+      const routinePoll = req.method === "GET" && req.path === "/api/session";
+      const interesting = req.path.startsWith("/api") || req.path === "/turn";
+      if (interesting && !routinePoll && (req.method !== "GET" || res.statusCode >= 400)) {
         console.log(`[req] ${req.method} ${req.originalUrl} -> ${res.statusCode}`);
       }
     });
