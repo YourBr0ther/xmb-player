@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xmb-api
+  namespace: psp-xmb
+  labels:
+    app: xmb-api
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate         # single RWO config PVC
+  selector:
+    matchLabels:
+      app: xmb-api
+  template:
+    metadata:
+      labels:
+        app: xmb-api
+    spec:
+      serviceAccountName: xmb-api
+      containers:
+        - name: xmb-api
+          image: docker.io/yourbr0ther/psp-xmb-api:phase2a
+          imagePullPolicy: Always
+          env:
+            - name: PORT
+              value: "8080"
+            - name: ROMS_DIR
+              value: /roms
+            - name: CONFIG_DIR
+              value: /config
+            - name: POD_NAMESPACE
+              value: psp-xmb
+            - name: XMB_API_TOKEN
+              valueFrom:
+                secretKeyRef: { name: psp-xmb-auth, key: xmb-api-token }
+            - name: SUPERVISOR_TOKEN
+              valueFrom:
+                secretKeyRef: { name: psp-xmb-auth, key: supervisor-token }
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          volumeMounts:
+            - name: roms
+              mountPath: /roms
+              subPath: ROMs/roms
+              readOnly: true
+            - name: config
+              mountPath: /config
+      volumes:
+        - name: roms
+          persistentVolumeClaim:
+            claimName: roms
+        - name: config
+          persistentVolumeClaim:
+            claimName: xmb-api-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: xmb-api
+  namespace: psp-xmb
+  labels:
+    app: xmb-api
+spec:
+  type: ClusterIP
+  selector:
+    app: xmb-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

@@ -5,3 +5,6 @@ resources:
   - roms-nfs.yaml
   - pvcs.yaml
   - game-session.yaml
+  - xmb-api-rbac.yaml
+  - xmb-api-config-pvc.yaml
+  - xmb-api.yaml
