@@ -31,15 +31,16 @@ spec:
           env:
             - name: SELKIES_ENCODER
               value: nvh264enc
+            # Basic auth is disabled: the web UI is reached through Traefik at
+            # xmb.example.com, which Authelia already gates, so a second
+            # prompt is redundant. NOTE: because the pod uses hostNetwork, the
+            # direct path http://<node-ip>:8080 bypasses Authelia and is now
+            # unauthenticated on the LAN. Acceptable for single-user LAN;
+            # re-enable (set "true" + restore the USER/PASSWORD env below) if
+            # the node IP should be protected. The supervisor API on :9090 is
+            # still bearer-token protected regardless.
             - name: SELKIES_ENABLE_BASIC_AUTH
-              value: "true"
-            - name: SELKIES_BASIC_AUTH_USER
-              value: psp
-            - name: SELKIES_BASIC_AUTH_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: psp-xmb-auth
-                  key: basic-auth-password
+              value: "false"
             - name: SUPERVISOR_TOKEN
               valueFrom:
                 secretKeyRef:
