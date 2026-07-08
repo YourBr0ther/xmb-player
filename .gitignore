@@ -1,2 +1,7 @@
 .worktrees/
 __pycache__/
+node_modules/
+*.pyc
+.DS_Store
+secret.yaml
+*.local.yaml

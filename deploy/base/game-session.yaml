@@ -1,0 +1,99 @@
+# deploy/base/game-session.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-session
+  namespace: psp-xmb
+  labels:
+    app: game-session
+spec:
+  # Scaled 0<->1 by hand today, by xmb-api in Phase 2. Never >1.
+  replicas: 0
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: game-session
+  template:
+    metadata:
+      labels:
+        app: game-session
+    spec:
+      runtimeClassName: nvidia
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        kubernetes.io/hostname: k3s-node4
+      containers:
+        - name: game-session
+          image: docker.io/yourbr0ther/psp-xmb-game-session:phase1
+          imagePullPolicy: Always
+          env:
+            - name: SELKIES_ENCODER
+              value: nvh264enc
+            - name: SELKIES_ENABLE_BASIC_AUTH
+              value: "true"
+            - name: SELKIES_BASIC_AUTH_USER
+              value: psp
+            - name: SELKIES_BASIC_AUTH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: psp-xmb-auth
+                  key: basic-auth-password
+            - name: SUPERVISOR_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: psp-xmb-auth
+                  key: supervisor-token
+          ports:
+            - containerPort: 8080   # selkies web + signaling (nginx)
+            - containerPort: 9090   # game supervisor API
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: roms
+              mountPath: /roms
+              subPath: ROMs/roms
+            - name: saves
+              mountPath: /saves
+            - name: states
+              mountPath: /states
+            - name: dshm
+              mountPath: /dev/shm
+      volumes:
+        - name: roms
+          persistentVolumeClaim:
+            claimName: roms
+        - name: saves
+          persistentVolumeClaim:
+            claimName: saves
+        - name: states
+          persistentVolumeClaim:
+            claimName: states
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: game-session
+  namespace: psp-xmb
+  labels:
+    app: game-session
+spec:
+  type: ClusterIP
+  selector:
+    app: game-session
+  ports:
+    - name: web
+      port: 8080
+      targetPort: 8080
