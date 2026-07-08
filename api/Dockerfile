@@ -15,7 +15,7 @@ RUN npm run build
 FROM node:20-slim AS build
 WORKDIR /app
 COPY api/package.json api/package-lock.json* ./
-RUN npm install
+RUN npm ci
 COPY api/tsconfig.json ./
 COPY api/src ./src
 RUN npm run build && npm prune --omit=dev

@@ -39,15 +39,28 @@ export interface GameViewProps {
 export function GameView({ client, game, onExitToCrossbar }: GameViewProps) {
   const [homeOpen, setHomeOpen] = useState(false);
 
+  // RetroArch's pause command is a toggle. Opening the Home menu pauses the
+  // emulator (so "Paused" is true, not just a label); Resume toggles it back.
+  // open/close are strictly paired (HomeMenu owns Escape while open), so the
+  // toggle stays balanced. Best-effort — a dropped command shouldn't wedge the UI.
+  const openHome = () => {
+    setHomeOpen(true);
+    client.command("pause").catch(() => {});
+  };
+  const resume = () => {
+    setHomeOpen(false);
+    client.command("pause").catch(() => {});
+  };
+
   return (
     <div className="gameview">
-      <Stream base="" onHome={() => setHomeOpen(true)} />
+      <Stream base="" onHome={openHome} />
 
       {homeOpen && (
         <HomeMenu
           client={client}
           game={game}
-          onResume={() => setHomeOpen(false)}
+          onResume={resume}
           onQuit={onExitToCrossbar}
         />
       )}

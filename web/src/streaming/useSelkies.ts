@@ -39,7 +39,8 @@ function signallingUrl(base: string): URL {
  */
 export function useSelkies(
   videoRef: RefObject<HTMLVideoElement | null>,
-  base: string = typeof window !== "undefined" ? window.location.origin : "http://localhost",
+  // An empty or omitted base falls back to the current origin below.
+  base: string = "",
 ): UseSelkiesResult {
   const [status, setStatus] = useState<StreamStatus>("idle");
   const [needsUserGesture, setNeedsUserGesture] = useState(false);
