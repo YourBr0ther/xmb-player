@@ -59,6 +59,12 @@ function Console() {
   const [leaving, setLeaving] = useState(false);
   // `since` of the crash we've already acknowledged; a newer crash re-shows.
   const [ackedCrash, setAckedCrash] = useState<number | null>(null);
+  // A launch/power-off request that failed, shown to the user instead of being
+  // swallowed silently (which reads as "nothing happened").
+  const [actionError, setActionError] = useState<string | null>(null);
+  // Set the instant a launch request succeeds, so the UI shows "Starting…"
+  // immediately rather than waiting for the first session update to arrive.
+  const [launchPending, setLaunchPending] = useState<string | null>(null);
 
   // Load the library once.
   useEffect(() => {
@@ -117,18 +123,26 @@ function Console() {
       stateRef.current = next;
       setState(next);
       if (!effect) return;
-      const run = effect.type === "launch"
-        ? client.start(effect.gameId)
-        : client.powerOff();
-      run.catch(() => {}); // errors surface via the session state / error UI
+      if (effect.type === "launch") {
+        setLaunchPending(effect.gameId);        // optimistic: show "Starting…" now
+        client.start(effect.gameId)
+          .catch((err) => {
+            setLaunchPending(null);
+            setActionError(err instanceof Error ? err.message : "Couldn't start the game.");
+          });
+      } else {
+        client.powerOff()
+          .catch((err) => setActionError(err instanceof Error ? err.message : "Couldn't power off."));
+      }
     },
     [client],
   );
 
   // Route the console by live session state. The crossbar is only the "resting"
-  // surface; starting / in-game / crashed take over.
+  // surface; starting / in-game / crashed take over. `launchPending` makes the
+  // launch feel instant while the first session update is still in flight.
   const phase = session?.state ?? null;
-  const launching = phase === "starting";
+  const launching = phase === "starting" || (launchPending != null && phase !== "in-game");
   const playing = phase === "in-game" && !leaving && session?.game != null;
   const crashOpen = phase === "crashed" && session!.since !== ackedCrash;
   // While anything other than the crossbar is on screen, the crossbar must not
@@ -139,6 +153,12 @@ function Console() {
   // Clear the optimistic-leave flag once the session actually leaves in-game.
   useEffect(() => {
     if (phase !== "in-game") setLeaving(false);
+  }, [phase]);
+
+  // Once the session actually reflects the launch, drop the optimistic flag and
+  // let the real session state drive the UI.
+  useEffect(() => {
+    if (phase === "starting" || phase === "in-game") setLaunchPending(null);
   }, [phase]);
 
   // Keyboard + gamepad → dispatch. Active only while the crossbar is mounted
@@ -184,7 +204,7 @@ function Console() {
   }
 
   if (launching) {
-    return <Launching title={session!.game?.title ?? null} substate={session!.substate} />;
+    return <Launching title={session?.game?.title ?? null} substate={session?.substate} />;
   }
 
   if (playing) {
@@ -229,6 +249,14 @@ function Console() {
           onDismiss={() => setAckedCrash(session!.since)}
         />
       )}
+
+      {actionError && !crashOpen && (
+        <ErrorDialog
+          message={actionError}
+          detail={null}
+          onDismiss={() => setActionError(null)}
+        />
+      )}
     </div>
   );
 }
@@ -268,9 +296,11 @@ function Launching({
 function ErrorDialog({
   detail,
   onDismiss,
+  message = "The game could not be started. (80020148)",
 }: {
   detail: string | null;
   onDismiss: () => void;
+  message?: string;
 }) {
   const okRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -291,7 +321,7 @@ function ErrorDialog({
       <div className="error-dialog__panel">
         <p className="error-dialog__eyebrow">Error</p>
         <p className="error-dialog__message">
-          The game could not be started. (80020148)
+          {message}
         </p>
         {detail && <p className="error-dialog__detail">{detail}</p>}
         <div className="error-dialog__actions">

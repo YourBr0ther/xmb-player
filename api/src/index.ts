@@ -20,6 +20,8 @@ async function main() {
 
   const app = createApp({ library, session });
   const server = createServer(app);
+  // Log every WebSocket upgrade attempt (passive; does not consume the socket).
+  server.on("upgrade", (req) => console.log(`[upgrade] ${req.method} ${req.url}`));
   attachWs(server, { session, path: "/api/ws" });
   // SPA -> game-session pod bridge: GET /turn + the /webrtc/signalling WS.
   // nodeIP comes from the SessionManager's current snapshot (null when idle).

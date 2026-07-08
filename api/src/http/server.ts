@@ -21,6 +21,20 @@ export function createApp(deps: { library: LibraryProvider; session: SessionLike
   const app = express();
   app.use(express.json());
 
+  // Access log: log state-changing actions and anything that isn't a normal
+  // success. Skips the routine GET /api/session poll and static assets to keep
+  // the log readable.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    res.on("finish", () => {
+      const routinePoll = req.method === "GET" && req.path === "/api/session";
+      const interesting = req.path.startsWith("/api") || req.path === "/turn";
+      if (interesting && !routinePoll && (req.method !== "GET" || res.statusCode >= 400)) {
+        console.log(`[req] ${req.method} ${req.originalUrl} -> ${res.statusCode}`);
+      }
+    });
+    next();
+  });
+
   app.get("/healthz", (_req, res) => res.json({ ok: true }));
 
   // No app-level auth: xmb-api is a ClusterIP service reachable only through the
