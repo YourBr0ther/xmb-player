@@ -39,6 +39,9 @@ function signallingUrl(base: string): URL {
  */
 export function useSelkies(
   videoRef: RefObject<HTMLVideoElement | null>,
+  // Separate <audio> element for the audio peer (Selkies uses a distinct
+  // audio-only WebRTC connection, consumer peer_id 3). Optional.
+  audioRef?: RefObject<HTMLAudioElement | null>,
   // An empty or omitted base falls back to the current origin below.
   base: string = "",
 ): UseSelkiesResult {
@@ -48,10 +51,13 @@ export function useSelkies(
 
   const requestPlay = () => {
     const video = videoRef.current;
+    const audio = audioRef?.current;
     setNeedsUserGesture(false);
-    // Retry both the element and the Selkies play path; ignore rej(we've cleared
-    // the gesture flag and the user can try again).
+    // Retry both elements + the Selkies play path from within the user gesture.
+    // Audio autoplay is almost always blocked until a gesture, so this is what
+    // actually turns sound on.
     video?.play().catch(() => undefined);
+    audio?.play().catch(() => undefined);
     webrtcRef.current?.playStream();
   };
 
@@ -64,6 +70,8 @@ export function useSelkies(
     let cancelled = false;
     let signalling: SelkiesSignalling | null = null;
     let webrtc: SelkiesWebRTC | null = null;
+    let audioSignalling: SelkiesSignalling | null = null;
+    let audioWebrtc: SelkiesWebRTC | null = null;
 
     async function connect() {
       const video = videoRef.current;
@@ -115,6 +123,24 @@ export function useSelkies(
         webrtc?.input.detach();
       };
 
+      // 3b. Audio peer — a separate signalling + WebRTCDemo on consumer peer_id 3,
+      //     bound to its own <audio> element. We deliberately do NOT attach its
+      //     input (only the video peer handles input, else keypresses double).
+      //     Its signalling reuses the global `window.webrtc` on its hot path,
+      //     which is the video peer we set above.
+      const audio = audioRef?.current ?? null;
+      if (audio) {
+        audioSignalling = new Signalling(signallingUrl(origin));
+        audioWebrtc = new WebRTCDemo(audioSignalling, audio, 3);
+        audioWebrtc.onplaystreamrequired = () => {
+          // Audio autoplay is blocked until a user gesture; surface the same
+          // click-to-start affordance the video path uses.
+          audio.play().catch(() => {
+            if (!cancelled) setNeedsUserGesture(true);
+          });
+        };
+      }
+
       // 4. Fetch /turn for the RTCConfiguration; MUST be set before connect().
       try {
         const config = (await fetch(new URL("/turn", origin)).then((r) => {
@@ -123,6 +149,7 @@ export function useSelkies(
         })) as RTCConfiguration;
         if (cancelled) return;
         webrtc.rtcPeerConfig = config;
+        if (audioWebrtc) audioWebrtc.rtcPeerConfig = config;
       } catch {
         // Fall back to the client's built-in default rtcPeerConfig (STUN-only);
         // connect may still succeed on a LAN. Do not abort the attempt.
@@ -131,6 +158,7 @@ export function useSelkies(
 
       // 5. Connect (builds RTCPeerConnection from rtcPeerConfig, then signalling).
       webrtc.connect();
+      audioWebrtc?.connect();
     }
 
     void connect();
@@ -144,16 +172,20 @@ export function useSelkies(
       }
       try {
         signalling?.disconnect();
+        audioSignalling?.disconnect();
       } catch {
         /* ignore */
       }
       try {
         webrtc?.peerConnection?.close();
+        audioWebrtc?.peerConnection?.close();
       } catch {
         /* ignore */
       }
       const video = videoRef.current;
       if (video) video.srcObject = null;
+      const audio = audioRef?.current;
+      if (audio) audio.srcObject = null;
       if (window.webrtc === webrtc) delete window.webrtc;
       webrtcRef.current = null;
     };
