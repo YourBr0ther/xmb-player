@@ -3,7 +3,6 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import type { SystemGroup, Game } from "../types.js";
-import { tokenMatches } from "./auth.js";
 
 export interface LibraryProvider {
   get(): SystemGroup[];
@@ -18,33 +17,27 @@ export interface SessionLike {
 
 const COMMANDS = new Set(["pause", "save_state", "load_state", "quit"]);
 
-export function createApp(deps: { library: LibraryProvider; session: SessionLike; token: string; webDir?: string }): Express {
+export function createApp(deps: { library: LibraryProvider; session: SessionLike; webDir?: string }): Express {
   const app = express();
   app.use(express.json());
 
   app.get("/healthz", (_req, res) => res.json({ ok: true }));
 
-  // Static SPA (UNGATED). The built web/dist is bundled into the image at
-  // WEB_DIR (default /app/web). index.html + JS must be fetchable WITHOUT the
-  // bearer token so the user can load the app and THEN enter the PIN; the
-  // bearer gate below stays on /api/* only. Guarded on the presence of a real
-  // index.html so the process still starts (and /healthz works) when the dir is
-  // absent — e.g. local dev and unit tests.
+  // No app-level auth: xmb-api is a ClusterIP service reachable only through the
+  // Authelia-gated ingress (a single sign-on), so a second PIN would be
+  // redundant. The internal supervisor bearer (xmb-api -> game-session pod) is a
+  // separate token and is unaffected.
+  //
+  // Static SPA: the built web/dist is bundled into the image at WEB_DIR
+  // (default /app/web). Guarded on the presence of a real index.html so the
+  // process still starts (and /healthz works) when the dir is absent — e.g.
+  // local dev and unit tests.
   const webDir = deps.webDir ?? process.env.WEB_DIR ?? "/app/web";
   const indexHtml = join(webDir, "index.html");
   const serveStatic = existsSync(indexHtml);
   if (serveStatic) {
     app.use(express.static(webDir));
   }
-
-  // Bearer gate — scoped to /api/* so static assets, /healthz, /turn and
-  // /webrtc (the stream proxy, attached separately) stay ungated.
-  app.use("/api", (req: Request, res: Response, next: NextFunction) => {
-    const header = req.headers.authorization ?? "";
-    const provided = header.startsWith("Bearer ") ? header.slice(7) : "";
-    if (tokenMatches(provided, deps.token)) return next();
-    res.status(401).json({ error: "unauthorized" });
-  });
 
   const findGame = (id: string): Game | undefined =>
     deps.library.get().flatMap(g => g.games).find(g => g.id === id);

@@ -1,10 +1,11 @@
 // web/src/session/useSession.ts
 //
-// Live session state over the xmb-api WebSocket. Opens `/api/ws?token=…` on the
-// current origin (ws:// or wss:// mirroring http/https), parses each frame as a
+// Live session state over the xmb-api WebSocket. Opens `/api/ws` on the current
+// origin (ws:// or wss:// mirroring http/https), parses each frame as a
 // SessionSnapshot, and reconnects with a short exponential backoff if the socket
 // drops. Returns null until the first frame arrives (the server pushes a snapshot
-// immediately on connect). Cleans up on unmount / token change.
+// immediately on connect). Cleans up on unmount. No token in the URL — access is
+// gated by Authelia at the ingress.
 //
 // jsdom has no WebSocket; when the global is absent the hook is a no-op so unit
 // tests that render the app don't blow up.
@@ -16,19 +17,17 @@ const INITIAL_BACKOFF = 500;
 const MAX_BACKOFF = 8000;
 
 /** Build the same-origin ws(s):// URL for the session socket. */
-function wsUrl(token: string): string {
+function wsUrl(): string {
   const url = new URL("/api/ws", window.location.href);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  url.searchParams.set("token", token);
   return url.toString();
 }
 
-export function useSession(token: string | null): SessionSnapshot | null {
+export function useSession(): SessionSnapshot | null {
   const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
 
   useEffect(() => {
     setSnapshot(null);
-    if (!token) return;
     if (typeof WebSocket === "undefined") return; // jsdom / SSR guard
 
     let disposed = false;
@@ -38,7 +37,7 @@ export function useSession(token: string | null): SessionSnapshot | null {
 
     const connect = () => {
       if (disposed) return;
-      const ws = new WebSocket(wsUrl(token));
+      const ws = new WebSocket(wsUrl());
       socket = ws;
 
       ws.onopen = () => {
@@ -71,7 +70,7 @@ export function useSession(token: string | null): SessionSnapshot | null {
         socket.close();
       }
     };
-  }, [token]);
+  }, []);
 
   return snapshot;
 }

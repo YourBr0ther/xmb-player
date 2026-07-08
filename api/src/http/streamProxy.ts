@@ -5,13 +5,11 @@
 //   - GET /turn                -> proxied to http://<nodeIP>:8080/turn (RTCConfiguration JSON)
 //   - WS  /webrtc/signalling/  -> proxied to ws://<nodeIP>:8080/webrtc/signalling/
 //
-// AUTH DECISION (deliberate): /turn and /webrtc/signalling are left UNGATED by
-// the bearer token. Selkies' client fetches /turn and opens the signalling WS
-// WITHOUT any Authorization header, so gating them would break the stream. This
-// is safe because the browser is already same-origin and Authelia-gated at the
-// ingress, and the game-session pod itself has no auth. The bearer gate stays on
-// /api/* (see server.ts). If per-request gating is wanted later, it must be
-// coordinated with a Selkies client change to send the token.
+// AUTH: xmb-api is a ClusterIP service reachable only through the Authelia-gated
+// ingress, so access control lives at the ingress (single sign-on). /turn and
+// /webrtc/signalling carry no app-level token — the Selkies client fetches them
+// with no Authorization header anyway, and the game-session pod itself has no
+// auth. Nothing here is directly LAN-reachable (unlike the hostNetwork pod).
 import type { Server } from "node:http";
 import type { Express, Request, Response } from "express";
 import { WebSocketServer, WebSocket } from "ws";
@@ -95,7 +93,7 @@ function proxyWs(client: WebSocket, upstreamUrl: string): void {
 export function attachStreamProxy(
   server: Server,
   app: Express,
-  deps: { nodeIP: () => string | null; token: string },
+  deps: { nodeIP: () => string | null },
 ): void {
   // GET /turn -> pod's RTCConfiguration JSON. UNGATED (see auth note above).
   app.get("/turn", async (_req: Request, res: Response) => {
