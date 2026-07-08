@@ -54,6 +54,11 @@ export function useSelkies(
     webrtcRef.current?.playStream();
   };
 
+  // An explicit empty base (e.g. <Stream base="">) must fall back to the
+  // current origin; new URL(path, "") throws "Invalid base URL".
+  const origin =
+    base || (typeof window !== "undefined" ? window.location.origin : "http://localhost");
+
   useEffect(() => {
     let cancelled = false;
     let signalling: SelkiesSignalling | null = null;
@@ -74,7 +79,7 @@ export function useSelkies(
       if (cancelled) return;
 
       // 1. Signalling on our origin (video consumer = peer_id 1 by default).
-      signalling = new Signalling(signallingUrl(base));
+      signalling = new Signalling(signallingUrl(origin));
 
       // 2. Video WebRTCDemo bound to our <video>; publish the global the
       //    signalling hot-path reads (README gotcha #1).
@@ -111,7 +116,7 @@ export function useSelkies(
 
       // 4. Fetch /turn for the RTCConfiguration; MUST be set before connect().
       try {
-        const config = (await fetch(new URL("/turn", base)).then((r) => {
+        const config = (await fetch(new URL("/turn", origin)).then((r) => {
           if (!r.ok) throw new Error(`/turn ${r.status}`);
           return r.json();
         })) as RTCConfiguration;
@@ -153,7 +158,7 @@ export function useSelkies(
     };
     // Reconnect only if the origin base changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [base]);
+  }, [origin]);
 
   return { status, needsUserGesture, requestPlay };
 }
