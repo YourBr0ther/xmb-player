@@ -131,3 +131,48 @@ describe("SessionManager.powerOff", () => {
     expect(m.snapshot().game).toBeNull();
   });
 });
+
+describe("SessionManager concurrency & subscription", () => {
+  it("rejects a concurrent start with 'session busy'", async () => {
+    const cluster = fakeCluster([ready]); cluster.replicas = 1;
+    const sup = fakeSupervisor();
+    const m = new SessionManager(cluster, sup, { pollMs: 1, timeoutMs: 1000 });
+    const p1 = m.start(GAME);
+    await expect(m.start(GAME)).rejects.toThrow(/busy/i);
+    await p1;
+  });
+
+  it("powerOff during an in-flight start does not leave state in-game", async () => {
+    const cluster = fakeCluster([ready]); cluster.replicas = 1;
+    const sup = fakeSupervisor();
+    let release!: () => void;
+    const gate = new Promise<void>(r => { release = r; });
+    sup.startGame = async () => { await gate; };
+    const m = new SessionManager(cluster, sup, { pollMs: 1, timeoutMs: 1000 });
+    const starting = m.start(GAME);
+    await new Promise(r => setTimeout(r, 20));  // let start() park inside startGame
+    await m.powerOff();
+    release();
+    await starting;
+    expect(m.snapshot().state).toBe("off");
+    expect(cluster.replicas).toBe(0);
+  });
+
+  it("onChange unsubscribe stops delivery", async () => {
+    const cluster = fakeCluster([ready]); cluster.replicas = 1;
+    const sup = fakeSupervisor();
+    const m = new SessionManager(cluster, sup, { pollMs: 1, timeoutMs: 1000 });
+    const seen: string[] = [];
+    const off = m.onChange(s => seen.push(s.state));
+    off();
+    await m.start(GAME);
+    expect(seen).toEqual([]);
+  });
+
+  it("command without an active session throws", async () => {
+    const cluster = fakeCluster([{ phase: "None", ready: false, hostIP: null }]);
+    const sup = fakeSupervisor();
+    const m = new SessionManager(cluster, sup, { pollMs: 1, timeoutMs: 1000 });
+    await expect(m.command("pause")).rejects.toThrow(/no active session/i);
+  });
+});

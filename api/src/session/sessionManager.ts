@@ -10,6 +10,7 @@ export class SessionManager {
   private readonly timeoutMs: number;
   private readonly now: () => number;
   private busy = false;
+  private generation = 0;
 
   constructor(
     private cluster: ClusterPort,
@@ -30,7 +31,15 @@ export class SessionManager {
   }
 
   private set(patch: Partial<SessionSnapshot>): void {
-    this.snap = { ...this.snap, ...patch, since: this.now() };
+    const next = { ...this.snap, ...patch };
+    const unchanged =
+      next.state === this.snap.state &&
+      next.substate === this.snap.substate &&
+      next.node === this.snap.node &&
+      next.error === this.snap.error &&
+      JSON.stringify(next.game) === JSON.stringify(this.snap.game);
+    if (unchanged) return;
+    this.snap = { ...next, since: this.now() };
     for (const cb of this.listeners) cb(this.snapshot());
   }
 
@@ -51,10 +60,8 @@ export class SessionManager {
   async start(game: Game): Promise<void> {
     if (this.busy) throw new Error("session busy");
     this.busy = true;
+    const gen = ++this.generation;
     try {
-      // Emit a bare "starting" transition (no substate) first so subscribers
-      // that project `substate ?? state` observe the state entry, then the
-      // "scaling" substate only when we actually scale.
       this.set({ state: "starting", substate: undefined,
         game: { id: game.id, title: game.title, system: game.system }, error: undefined });
       const st = await this.cluster.podStatus();
@@ -63,14 +70,17 @@ export class SessionManager {
         await this.cluster.scale(1);
       }
       const hostIP = await this.waitForReady();
+      if (gen !== this.generation) return;            // superseded (e.g. powerOff)
       this.set({ substate: "loading-game" });
       await this.supervisor.startGame(hostIP, game.core, game.path);
+      if (gen !== this.generation) return;            // superseded
       this.set({ state: "in-game", substate: undefined });
     } catch (e) {
+      if (gen !== this.generation) return;            // superseded; don't clobber authoritative state
       const msg = e instanceof Error ? e.message : String(e);
-      // If the pod never came up, we are effectively off; otherwise idle.
       const st = await this.cluster.podStatus().catch(() => null);
       const warm = st?.phase === "Running" && st.ready;
+      if (!warm) await this.cluster.scale(0).catch(() => {}); // don't leave a Pending pod burning a GPU slot
       this.set({ state: warm ? "idle" : "off", substate: undefined,
         game: null, node: warm ? this.snap.node : null, error: msg });
       throw e;
@@ -83,17 +93,19 @@ export class SessionManager {
     const node = this.snap.node;
     if (!node) throw new Error("no active session");
     if (cmd === "quit") {
+      this.generation++;                              // invalidate any in-flight start
       await this.supervisor.stopGame(node);
-      this.set({ state: "idle", substate: undefined, game: null });
+      this.set({ state: "idle", substate: undefined, game: null, error: undefined });
       return;
     }
     await this.supervisor.command(node, cmd);
   }
 
   async powerOff(): Promise<void> {
+    this.generation++;                                // invalidate any in-flight start
     const node = this.snap.node;
     if (node) await this.supervisor.stopGame(node).catch(() => {});
     await this.cluster.scale(0);
-    this.set({ state: "off", substate: undefined, game: null, node: null });
+    this.set({ state: "off", substate: undefined, game: null, node: null, error: undefined });
   }
 }
