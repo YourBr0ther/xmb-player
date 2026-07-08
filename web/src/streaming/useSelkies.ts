@@ -132,6 +132,9 @@ export function useSelkies(
       if (audio) {
         audioSignalling = new Signalling(signallingUrl(origin));
         audioWebrtc = new WebRTCDemo(audioSignalling, audio, 3);
+        // Expose the audio peer for diagnostics (audio RTP stats), mirroring
+        // the original Selkies client's window.audio_webrtc.
+        (window as unknown as { audio_webrtc?: SelkiesWebRTC }).audio_webrtc = audioWebrtc;
         audioWebrtc.onplaystreamrequired = () => {
           // Audio autoplay is blocked until a user gesture; surface the same
           // click-to-start affordance the video path uses.
