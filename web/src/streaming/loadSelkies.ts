@@ -65,7 +65,8 @@ export interface SelkiesSignalling {
 
 export interface SelkiesWebRTC {
   input: SelkiesInput;
-  element: HTMLVideoElement;
+  // A media element — <video> for the video peer, <audio> for the audio peer.
+  element: HTMLMediaElement;
   rtcPeerConfig: RTCConfiguration;
   forceTurn: boolean;
   peerConnection?: RTCPeerConnection;
@@ -85,7 +86,7 @@ export interface SelkiesWebRTC {
 export type SelkiesSignallingCtor = new (server: URL) => SelkiesSignalling;
 export type SelkiesWebRTCCtor = new (
   signalling: SelkiesSignalling,
-  element: HTMLVideoElement,
+  element: HTMLMediaElement,
   peerId: number,
 ) => SelkiesWebRTC;
 

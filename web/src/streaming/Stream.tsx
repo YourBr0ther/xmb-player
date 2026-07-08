@@ -17,9 +17,17 @@ export interface StreamProps {
 
 export function Stream({ base, onHome }: StreamProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  // Start muted so muted-autoplay is allowed; user can unmute once playing.
-  const [muted, setMuted] = useState(true);
-  const { status, needsUserGesture, requestPlay } = useSelkies(videoRef, base);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  // The video peer is video-only; sound arrives on a separate audio peer/element
+  // that browsers won't autoplay until a user gesture. `soundOn` tracks whether
+  // the user has enabled it.
+  const [soundOn, setSoundOn] = useState(false);
+  const { status, needsUserGesture, requestPlay } = useSelkies(videoRef, audioRef, base);
+
+  const enableSound = () => {
+    requestPlay();      // plays the <audio> element from within the click gesture
+    setSoundOn(true);
+  };
 
   // Escape opens the Home menu (parent-owned). Capture at the document so it
   // works even while the <video> has focus for input capture.
@@ -49,9 +57,11 @@ export function Stream({ base, onHome }: StreamProps) {
         ref={videoRef}
         playsInline
         autoPlay
-        muted={muted}
+        muted
         style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
       />
+      {/* Sound arrives on a separate audio peer; hidden element, played on gesture. */}
+      <audio ref={audioRef} autoPlay style={{ display: "none" }} />
 
       {!connected && (
         <div
@@ -93,10 +103,10 @@ export function Stream({ base, onHome }: StreamProps) {
         </button>
       )}
 
-      {connected && muted && (
+      {connected && !soundOn && (
         <button
           type="button"
-          onClick={() => setMuted(false)}
+          onClick={enableSound}
           style={{
             position: "absolute",
             bottom: "1rem",
@@ -110,7 +120,7 @@ export function Stream({ base, onHome }: StreamProps) {
             background: "rgba(0,0,0,0.65)",
           }}
         >
-          Unmute
+          🔊 Enable sound
         </button>
       )}
     </div>
