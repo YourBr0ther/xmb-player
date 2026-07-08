@@ -1,0 +1,11 @@
+# Build context is the repo root (see api/Dockerfile). Keep it lean and avoid
+# copying host-built artifacts into the image.
+**/node_modules
+**/dist
+**/*.log
+.git
+.worktrees
+docs
+session
+scripts
+web/tsconfig.tsbuildinfo

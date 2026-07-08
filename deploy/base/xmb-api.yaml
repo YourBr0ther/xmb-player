@@ -20,7 +20,7 @@ spec:
       serviceAccountName: xmb-api
       containers:
         - name: xmb-api
-          image: docker.io/yourbr0ther/psp-xmb-api:phase2a
+          image: docker.io/yourbr0ther/psp-xmb-api:phase2b
           imagePullPolicy: Always
           env:
             - name: PORT
