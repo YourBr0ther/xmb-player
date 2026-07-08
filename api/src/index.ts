@@ -6,6 +6,7 @@ import { K8sCluster } from "./adapters/k8sCluster.js";
 import { SupervisorClient } from "./adapters/supervisorClient.js";
 import { createApp } from "./http/server.js";
 import { attachWs } from "./http/wsBroadcaster.js";
+import { attachStreamProxy } from "./http/streamProxy.js";
 
 async function main() {
   const token = process.env.XMB_API_TOKEN ?? "";
@@ -21,6 +22,9 @@ async function main() {
   const app = createApp({ library, session, token });
   const server = createServer(app);
   attachWs(server, { session, token, path: "/api/ws" });
+  // SPA -> game-session pod bridge: GET /turn + the /webrtc/signalling WS.
+  // nodeIP comes from the SessionManager's current snapshot (null when idle).
+  attachStreamProxy(server, app, { nodeIP: () => session.snapshot().node, token });
 
   server.listen(port, () => console.log(`[xmb-api] listening on :${port}`));
 }
