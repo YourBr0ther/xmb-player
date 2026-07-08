@@ -22,6 +22,12 @@ export function createClient(base = ""): XmbClient {
       headers: body ? { "Content-Type": "application/json" } : {},
       body: body ? JSON.stringify(body) : undefined,
     });
+    // If Authelia's session expired, the request is redirected to the login
+    // page on a different origin; the fetch "succeeds" with HTML. Detect that
+    // and surface a clear message instead of a confusing JSON parse error.
+    if (res.redirected && new URL(res.url).origin !== window.location.origin) {
+      throw new Error(`Not signed in — reload the page to sign in again.`);
+    }
     if (!res.ok) throw new Error(`${path} -> ${res.status}`);
     return res.json();
   }

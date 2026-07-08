@@ -21,6 +21,16 @@ export function createApp(deps: { library: LibraryProvider; session: SessionLike
   const app = express();
   app.use(express.json());
 
+  // Access log: one line per request. Skips the noisy static-asset GETs.
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    res.on("finish", () => {
+      if (req.path.startsWith("/api") || req.path === "/turn") {
+        console.log(`[req] ${req.method} ${req.originalUrl} -> ${res.statusCode}`);
+      }
+    });
+    next();
+  });
+
   app.get("/healthz", (_req, res) => res.json({ ok: true }));
 
   // No app-level auth: xmb-api is a ClusterIP service reachable only through the
