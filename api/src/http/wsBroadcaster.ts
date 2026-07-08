@@ -2,6 +2,7 @@
 import type { Server } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
 import type { SessionSnapshot } from "../types.js";
+import { tokenMatches } from "./auth.js";
 
 interface SessionEvents {
   snapshot(): SessionSnapshot;
@@ -17,7 +18,7 @@ export function attachWs(server: Server, deps: { session: SessionEvents; token: 
     const token = url.searchParams.get("token") ??
       (req.headers.authorization?.replace(/^Bearer\s+/, "") ?? "");
     wss.handleUpgrade(req, socket, head, ws => {
-      if (token !== deps.token) { ws.close(1008, "unauthorized"); return; }
+      if (!tokenMatches(token, deps.token)) { ws.close(1008, "unauthorized"); return; }
       ws.send(JSON.stringify(deps.session.snapshot()));
       const off = deps.session.onChange(s => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(s));

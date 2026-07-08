@@ -51,3 +51,12 @@ it("sends a snapshot on connect and pushes transitions", async () => {
   expect(messages.at(-1).state).toBe("in-game");
   ws.close();
 });
+
+it("fails closed when no token is configured (empty token rejects)", async () => {
+  server = createServer();
+  attachWs(server, { session: fakeSession(), token: "", path: "/api/ws" });
+  const port = await listen();
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/api/ws?token=`);
+  const code = await new Promise<number>(res => ws.on("close", c => res(c)));
+  expect(code).toBe(1008);
+});

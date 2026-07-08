@@ -1,6 +1,7 @@
 // api/src/http/server.ts
 import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import type { SystemGroup, Game } from "../types.js";
+import { tokenMatches } from "./auth.js";
 
 export interface LibraryProvider {
   get(): SystemGroup[];
@@ -22,7 +23,9 @@ export function createApp(deps: { library: LibraryProvider; session: SessionLike
   app.get("/healthz", (_req, res) => res.json({ ok: true }));
 
   app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.headers.authorization === `Bearer ${deps.token}`) return next();
+    const header = req.headers.authorization ?? "";
+    const provided = header.startsWith("Bearer ") ? header.slice(7) : "";
+    if (tokenMatches(provided, deps.token)) return next();
     res.status(401).json({ error: "unauthorized" });
   });
 

@@ -76,3 +76,11 @@ it("DELETE session powers off", async () => {
   const { app: a } = app();
   expect((await request(a).delete("/api/session").set(auth)).status).toBe(200);
 });
+
+it("fails closed when no token is configured (empty token denies all)", async () => {
+  const f = fakes();
+  const a = createApp({ ...f, token: "" });
+  expect((await request(a).get("/api/library")).status).toBe(401);
+  // even an empty bearer must not authenticate
+  expect((await request(a).get("/api/library").set({ Authorization: "Bearer " })).status).toBe(401);
+});
