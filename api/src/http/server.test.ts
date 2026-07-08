@@ -22,65 +22,56 @@ function fakes() {
   return { session, library, started };
 }
 
-const TOKEN = "tok";
-function app() { const f = fakes(); return { app: createApp({ ...f, token: TOKEN }), f }; }
-const auth = { Authorization: `Bearer ${TOKEN}` };
+function app() { const f = fakes(); return { app: createApp({ ...f }), f }; }
 
-it("healthz needs no auth", async () => {
+it("healthz responds", async () => {
   const { app: a } = app();
   const res = await request(a).get("/healthz");
   expect(res.status).toBe(200);
 });
 
-it("library requires auth", async () => {
+// No app-level auth: access is gated by Authelia at the ingress, so /api is
+// reachable without a bearer token.
+it("library is served without a token", async () => {
   const { app: a } = app();
-  expect((await request(a).get("/api/library")).status).toBe(401);
-  const ok = await request(a).get("/api/library").set(auth);
+  const ok = await request(a).get("/api/library");
   expect(ok.status).toBe(200);
   expect(ok.body[0].system).toBe("gba");
 });
 
 it("scan returns fresh catalog", async () => {
   const { app: a } = app();
-  const res = await request(a).post("/api/library/scan").set(auth);
+  const res = await request(a).post("/api/library/scan");
   expect(res.status).toBe(200);
   expect(res.body[0].games[0].title).toBe("Celeste");
 });
 
 it("session start resolves the game id and returns the snapshot", async () => {
   const { app: a, f } = app();
-  const res = await request(a).post("/api/session/start").set(auth).send({ gameId: "abc" });
+  const res = await request(a).post("/api/session/start").send({ gameId: "abc" });
   expect(res.status).toBe(202);
   expect(f.started).toEqual(["abc"]);
 });
 
 it("session start with unknown game id is 404", async () => {
   const { app: a } = app();
-  const res = await request(a).post("/api/session/start").set(auth).send({ gameId: "nope" });
+  const res = await request(a).post("/api/session/start").send({ gameId: "nope" });
   expect(res.status).toBe(404);
 });
 
 it("command validates the command name", async () => {
   const { app: a } = app();
-  expect((await request(a).post("/api/session/command").set(auth).send({ command: "bogus" })).status).toBe(400);
-  expect((await request(a).post("/api/session/command").set(auth).send({ command: "pause" })).status).toBe(200);
+  expect((await request(a).post("/api/session/command").send({ command: "bogus" })).status).toBe(400);
+  expect((await request(a).post("/api/session/command").send({ command: "pause" })).status).toBe(200);
 });
 
 it("GET session returns the snapshot", async () => {
   const { app: a } = app();
-  const res = await request(a).get("/api/session").set(auth);
+  const res = await request(a).get("/api/session");
   expect(res.body.state).toBe("off");
 });
 
 it("DELETE session powers off", async () => {
   const { app: a } = app();
-  expect((await request(a).delete("/api/session").set(auth)).status).toBe(200);
-});
-
-it("fails closed when no token is configured (empty token denies all)", async () => {
-  const f = fakes();
-  const a = createApp({ ...f, token: "" });
-  expect((await request(a).get("/api/library")).status).toBe(401);
-  // even an empty bearer must not authenticate
-  expect((await request(a).get("/api/library").set({ Authorization: "Bearer " })).status).toBe(401);
+  expect((await request(a).delete("/api/session")).status).toBe(200);
 });

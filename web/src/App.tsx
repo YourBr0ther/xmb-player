@@ -2,18 +2,18 @@
 //
 // App shell for the XMB console.
 //
-//   App    — owns the bearer token (the XMB PIN) in localStorage and the auth
-//            gate. Renders <Console> once a token exists.
-//   Gate   — PIN entry; stores the entered value as the token.
-//   Console— creates the API client, loads the library, subscribes to the live
-//            session over WebSocket, holds crossbar nav State (the Task 3
+//   App / Console — creates the API client, loads the library, subscribes to the
+//            live session over WebSocket, holds crossbar nav State (the Task 3
 //            reducer), wires keyboard + gamepad input (Task 4), and renders
-//            <Crossbar>. A 401 anywhere clears the token and returns to the gate.
+//            <Crossbar> / the in-game view.
 //
-// Task 9 seam: Console is where the crossbar↔in-game switch belongs. It already
-// holds the live `session` snapshot; when session.state becomes "starting" /
-// "in-game" it should render the launching indicator / <GameView> instead of
-// <Crossbar>, and suspend the crossbar input listeners while in-game.
+// No app-level auth: xmb-api sits behind Authelia at the ingress (single
+// sign-on), so there is no PIN — the app loads straight into the crossbar.
+//
+// Task 9 seam: Console is where the crossbar↔in-game switch lives. It holds the
+// live `session` snapshot; when session.state becomes "starting" / "in-game" it
+// renders the launching indicator / <GameView> instead of <Crossbar>, and
+// suspends the crossbar input listeners while in-game.
 
 import {
   useCallback,
@@ -21,7 +21,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type FormEvent,
 } from "react";
 import "./xmb/xmb.css";
 import { createClient } from "./api/client.js";
@@ -41,84 +40,27 @@ import { useSession } from "./session/useSession.js";
 import GameView from "./game/GameView.js";
 import "./game/game.css";
 
-const TOKEN_KEY = "xmb.token";
 const SETTINGS_CATEGORY = CATEGORIES.indexOf("settings");
 
-function isAuthError(err: unknown): boolean {
-  return err instanceof Error && /401/.test(err.message);
-}
-
 export default function App() {
-  const [token, setToken] = useState<string | null>(() =>
-    localStorage.getItem(TOKEN_KEY),
-  );
-
-  const saveToken = useCallback((value: string) => {
-    localStorage.setItem(TOKEN_KEY, value);
-    setToken(value);
-  }, []);
-
-  const clearToken = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    setToken(null);
-  }, []);
-
-  if (!token) return <Gate onSubmit={saveToken} />;
-  // `key` remounts the console on token change so stale state never leaks.
-  return <Console key={token} token={token} onInvalidToken={clearToken} />;
-}
-
-function Gate({ onSubmit }: { onSubmit: (token: string) => void }) {
-  const [pin, setPin] = useState("");
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    const value = pin.trim();
-    if (value) onSubmit(value);
-  };
-
-  return (
-    <div className="gate">
-      <span className="gate__brand">PSP · XMB</span>
-      <h1 className="gate__title">Enter your PIN</h1>
-      <form onSubmit={submit}>
-        <input
-          type="password"
-          inputMode="numeric"
-          autoFocus
-          value={pin}
-          placeholder="••••"
-          aria-label="PIN"
-          onChange={(e) => setPin(e.target.value)}
-        />
-        <button type="submit">Unlock</button>
-      </form>
-      <span className="gate__hint">The console remembers this on this device.</span>
-    </div>
-  );
+  return <Console />;
 }
 
 type LoadStatus = "loading" | "ready" | "error";
 
-function Console({
-  token,
-  onInvalidToken,
-}: {
-  token: string;
-  onInvalidToken: () => void;
-}) {
-  const client = useMemo(() => createClient(token), [token]);
+function Console() {
+  const client = useMemo(() => createClient(), []);
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [library, setLibrary] = useState<SystemGroup[]>([]);
   const [state, setState] = useState<State>(initialState);
-  const session = useSession(token);
+  const session = useSession();
   // Optimistic leave: set when Quit is issued so we drop the (now-frozen) game
   // surface immediately instead of waiting for the WS to report idle.
   const [leaving, setLeaving] = useState(false);
   // `since` of the crash we've already acknowledged; a newer crash re-shows.
   const [ackedCrash, setAckedCrash] = useState<number | null>(null);
 
-  // Load the library once; a 401 kicks us back to the gate.
+  // Load the library once.
   useEffect(() => {
     let cancelled = false;
     setStatus("loading");
@@ -129,15 +71,14 @@ function Console({
         setLibrary(lib);
         setStatus("ready");
       })
-      .catch((err) => {
+      .catch(() => {
         if (cancelled) return;
-        if (isAuthError(err)) onInvalidToken();
-        else setStatus("error");
+        setStatus("error");
       });
     return () => {
       cancelled = true;
     };
-  }, [client, onInvalidToken]);
+  }, [client]);
 
   // Library systems in the fixed order, filtered to those actually present.
   const systems = useMemo(
@@ -179,11 +120,9 @@ function Console({
       const run = effect.type === "launch"
         ? client.start(effect.gameId)
         : client.powerOff();
-      run.catch((err) => {
-        if (isAuthError(err)) onInvalidToken();
-      });
+      run.catch(() => {}); // errors surface via the session state / error UI
     },
-    [client, onInvalidToken],
+    [client],
   );
 
   // Route the console by live session state. The crossbar is only the "resting"
@@ -237,8 +176,8 @@ function Console({
       <div className="center">
         <span className="center__title">Couldn't reach the console.</span>
         <span className="center__error">The library didn't load. Check that xmb-api is running.</span>
-        <button type="button" onClick={onInvalidToken}>
-          Sign out
+        <button type="button" onClick={() => window.location.reload()}>
+          Retry
         </button>
       </div>
     );

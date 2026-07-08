@@ -23,21 +23,12 @@ async function listen(): Promise<number> {
   return (server.address() as any).port;
 }
 
-it("rejects connections without a valid token", async () => {
-  server = createServer();
-  attachWs(server, { session: fakeSession(), token: "tok", path: "/api/ws" });
-  const port = await listen();
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/api/ws?token=wrong`);
-  const code = await new Promise<number>(res => ws.on("close", c => res(c)));
-  expect(code).toBe(1008);
-});
-
 it("sends a snapshot on connect and pushes transitions", async () => {
   const session = fakeSession();
   server = createServer();
-  attachWs(server, { session, token: "tok", path: "/api/ws" });
+  attachWs(server, { session, path: "/api/ws" });
   const port = await listen();
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/api/ws?token=tok`);
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/api/ws`);
   const messages: any[] = [];
   // Attach the message listener BEFORE awaiting "open": on loopback the initial
   // snapshot frame is coalesced with the 101 upgrade, so a listener attached
@@ -50,13 +41,4 @@ it("sends a snapshot on connect and pushes transitions", async () => {
   expect(messages[0].state).toBe("off");
   expect(messages.at(-1).state).toBe("in-game");
   ws.close();
-});
-
-it("fails closed when no token is configured (empty token rejects)", async () => {
-  server = createServer();
-  attachWs(server, { session: fakeSession(), token: "", path: "/api/ws" });
-  const port = await listen();
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/api/ws?token=`);
-  const code = await new Promise<number>(res => ws.on("close", c => res(c)));
-  expect(code).toBe(1008);
 });

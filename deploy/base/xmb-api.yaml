@@ -31,9 +31,9 @@ spec:
               value: /config
             - name: POD_NAMESPACE
               value: psp-xmb
-            - name: XMB_API_TOKEN
-              valueFrom:
-                secretKeyRef: { name: psp-xmb-auth, key: xmb-api-token }
+            # No XMB_API_TOKEN: the app has no PIN (Authelia gates the ingress).
+            # SUPERVISOR_TOKEN is the internal bearer for xmb-api -> game-session
+            # pod (hostNetwork :9090) and stays.
             - name: SUPERVISOR_TOKEN
               valueFrom:
                 secretKeyRef: { name: psp-xmb-auth, key: supervisor-token }

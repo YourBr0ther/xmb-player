@@ -9,7 +9,9 @@ export interface XmbClient {
   powerOff(): Promise<SessionSnapshot>;
 }
 
-export function createClient(token: string, base = ""): XmbClient {
+// No Authorization header: xmb-api is gated by Authelia at the ingress (the
+// browser is already authenticated same-origin), so the app sends no token.
+export function createClient(base = ""): XmbClient {
   async function request<T>(
     method: string,
     path: string,
@@ -17,10 +19,7 @@ export function createClient(token: string, base = ""): XmbClient {
   ): Promise<T> {
     const res = await fetch(base + path, {
       method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(body ? { "Content-Type": "application/json" } : {}),
-      },
+      headers: body ? { "Content-Type": "application/json" } : {},
       body: body ? JSON.stringify(body) : undefined,
     });
     if (!res.ok) throw new Error(`${path} -> ${res.status}`);
