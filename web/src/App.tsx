@@ -38,6 +38,8 @@ import {
 import type { NavAction, NavContext, State } from "./xmb/navigation.js";
 import { keyToAction, createGamepadPoller } from "./xmb/input.js";
 import { useSession } from "./session/useSession.js";
+import GameView from "./game/GameView.js";
+import "./game/game.css";
 
 const TOKEN_KEY = "xmb.token";
 const SETTINGS_CATEGORY = CATEGORIES.indexOf("settings");
@@ -110,6 +112,11 @@ function Console({
   const [library, setLibrary] = useState<SystemGroup[]>([]);
   const [state, setState] = useState<State>(initialState);
   const session = useSession(token);
+  // Optimistic leave: set when Quit is issued so we drop the (now-frozen) game
+  // surface immediately instead of waiting for the WS to report idle.
+  const [leaving, setLeaving] = useState(false);
+  // `since` of the crash we've already acknowledged; a newer crash re-shows.
+  const [ackedCrash, setAckedCrash] = useState<number | null>(null);
 
   // Load the library once; a 401 kicks us back to the gate.
   useEffect(() => {
@@ -179,9 +186,26 @@ function Console({
     [client, onInvalidToken],
   );
 
-  // Keyboard + gamepad → dispatch. Active only while the crossbar is mounted.
+  // Route the console by live session state. The crossbar is only the "resting"
+  // surface; starting / in-game / crashed take over.
+  const phase = session?.state ?? null;
+  const launching = phase === "starting";
+  const playing = phase === "in-game" && !leaving && session?.game != null;
+  const crashOpen = phase === "crashed" && session!.since !== ackedCrash;
+  // While anything other than the crossbar is on screen, the crossbar must not
+  // eat keys: in-game the Stream captures input, and Escape belongs to the Home
+  // menu / Stream, not to the reducer's "back".
+  const suspendCrossbar = launching || phase === "in-game" || crashOpen;
+
+  // Clear the optimistic-leave flag once the session actually leaves in-game.
   useEffect(() => {
-    if (status !== "ready") return;
+    if (phase !== "in-game") setLeaving(false);
+  }, [phase]);
+
+  // Keyboard + gamepad → dispatch. Active only while the crossbar is mounted
+  // and interactive (not while launching / in-game / a crash dialog is up).
+  useEffect(() => {
+    if (status !== "ready" || suspendCrossbar) return;
     const onKeyDown = (e: KeyboardEvent) => {
       const action = keyToAction(e);
       if (!action) return;
@@ -199,7 +223,7 @@ function Console({
       window.removeEventListener("keydown", onKeyDown);
       poller.stop();
     };
-  }, [status, dispatch]);
+  }, [status, suspendCrossbar, dispatch]);
 
   if (status === "loading") {
     return (
@@ -217,6 +241,20 @@ function Console({
           Sign out
         </button>
       </div>
+    );
+  }
+
+  if (launching) {
+    return <Launching title={session!.game?.title ?? null} substate={session!.substate} />;
+  }
+
+  if (playing) {
+    return (
+      <GameView
+        client={client}
+        game={session!.game!}
+        onExitToCrossbar={() => setLeaving(true)}
+      />
     );
   }
 
@@ -245,6 +283,89 @@ function Console({
           <kbd>Esc</kbd> Back
         </span>
       </footer>
+
+      {crashOpen && (
+        <ErrorDialog
+          detail={session!.error ?? null}
+          onDismiss={() => setAckedCrash(session!.since)}
+        />
+      )}
+    </div>
+  );
+}
+
+// PSP-style launching indicator. Reads the WS substate for progress wording.
+const SUBSTATE_TEXT: Record<string, string> = {
+  scaling: "Allocating hardware",
+  pulling: "Fetching game data",
+  "pod-ready": "Console ready",
+  "loading-game": "Loading game",
+};
+
+function Launching({
+  title,
+  substate,
+}: {
+  title: string | null;
+  substate?: string;
+}) {
+  const status =
+    (substate && SUBSTATE_TEXT[substate]) ?? substate ?? "Loading";
+  return (
+    <div className="launch" role="status" aria-live="polite">
+      <p className="launch__eyebrow">Now Loading</p>
+      <h1 className="launch__title">{title ?? "Loading…"}</h1>
+      <p className="launch__status">{status}</p>
+      <span className="launch__dots" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </span>
+    </div>
+  );
+}
+
+// PSP-style crash dialog. A single OK dismisses it back to the crossbar.
+function ErrorDialog({
+  detail,
+  onDismiss,
+}: {
+  detail: string | null;
+  onDismiss: () => void;
+}) {
+  const okRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    okRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onDismiss();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [onDismiss]);
+
+  return (
+    <div className="error-dialog" role="alertdialog" aria-modal="true" aria-label="Error">
+      <div className="error-dialog__panel">
+        <p className="error-dialog__eyebrow">Error</p>
+        <p className="error-dialog__message">
+          The game could not be started. (80020148)
+        </p>
+        {detail && <p className="error-dialog__detail">{detail}</p>}
+        <div className="error-dialog__actions">
+          <button
+            type="button"
+            ref={okRef}
+            className="error-dialog__ok"
+            onClick={onDismiss}
+          >
+            OK
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
