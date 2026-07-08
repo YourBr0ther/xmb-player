@@ -1,0 +1,414 @@
+/* web/src/xmb/xmb.css
+ *
+ * XMB console theme — plain, but deliberate. A cool near-black gradient with a
+ * single icy-cyan focus accent (evokes the PSP/PS3 XrossMediaBar without the
+ * step-2 wave shader). Type is the system stack treated with intent: thin
+ * weights, wide tracking on labels, tabular numerals. The signature is the
+ * anchored crossbar motion — the active category stays pinned while the ribbon
+ * slides, and the focused item stays on a fixed baseline while the list scrolls.
+ */
+
+:root {
+  --bg-top: #0b1220;
+  --bg-bottom: #04060c;
+  --text: #eef2fb;
+  --muted: #7a869e;
+  --muted-strong: #a9b3c9;
+  --accent: #79c6ff;
+  --accent-glow: rgba(121, 198, 255, 0.55);
+  --accent-soft: rgba(121, 198, 255, 0.16);
+  --hairline: rgba(255, 255, 255, 0.09);
+  --danger: #ff9090;
+
+  --anchor: 15vw;
+  --cat-w: 152px;
+  --row-h: 3.2rem;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  color-scheme: dark;
+}
+
+/* ---- shared surfaces ---- */
+
+.xmb,
+.gate,
+.center {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(180deg, var(--bg-top), var(--bg-bottom));
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.xmb {
+  overflow: hidden;
+}
+
+/* ---- header / clock / hint ---- */
+
+.xmb__header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.4rem 1.9rem;
+  z-index: 2;
+}
+
+.wordmark {
+  font-size: 0.78rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wordmark b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.clock {
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  color: var(--muted-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.xmb__hint {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 1.6rem;
+  justify-content: center;
+  padding: 1.2rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+  z-index: 2;
+}
+.xmb__hint span {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.xmb__hint kbd {
+  font: inherit;
+  color: var(--muted-strong);
+  border: 1px solid var(--hairline);
+  border-radius: 0.3rem;
+  padding: 0.1rem 0.45rem;
+  letter-spacing: 0.08em;
+}
+
+/* ---- the horizontal category ribbon ---- */
+
+.xmb__bar {
+  position: absolute;
+  top: calc(26vh + 1.2rem);
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--hairline) 10%,
+    var(--hairline) 90%,
+    transparent
+  );
+}
+
+.ribbon {
+  position: absolute;
+  top: 26vh;
+  left: 0;
+  right: 0;
+  height: 0;
+  z-index: 1;
+}
+.ribbon__track {
+  display: flex;
+  align-items: flex-start;
+  transform: translateX(calc(var(--anchor) - var(--active) * var(--cat-w)));
+  transition: transform 190ms var(--ease);
+  will-change: transform;
+}
+
+.cat {
+  flex: 0 0 var(--cat-w);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.55rem;
+  transform-origin: left center;
+  transition: opacity 190ms ease;
+}
+.cat__icon {
+  width: 2.4rem;
+  height: 2.4rem;
+  display: grid;
+  place-items: center;
+  color: var(--muted-strong);
+  transition: color 190ms ease, transform 190ms var(--ease),
+    filter 190ms ease;
+}
+.cat__icon svg {
+  width: 100%;
+  height: 100%;
+}
+.cat.is-active .cat__icon {
+  color: var(--text);
+  transform: scale(1.16);
+  filter: drop-shadow(0 0 14px var(--accent-glow));
+}
+.cat__label {
+  font-size: 0.72rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 190ms ease, transform 190ms var(--ease), color 190ms ease;
+}
+.cat.is-active .cat__label {
+  opacity: 1;
+  transform: translateY(0);
+  color: var(--accent);
+}
+
+/* ---- the active vertical column ---- */
+
+.column {
+  position: absolute;
+  left: var(--anchor);
+  top: 22vh;
+  width: min(560px, 64vw);
+  height: 72vh;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(
+    180deg,
+    transparent,
+    #000 14%,
+    #000 82%,
+    transparent
+  );
+  mask-image: linear-gradient(
+    180deg,
+    transparent,
+    #000 14%,
+    #000 82%,
+    transparent
+  );
+}
+
+.column__caption {
+  position: absolute;
+  top: 0;
+  left: 1.1rem;
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.column__track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  transform: translateY(calc(28vh - var(--focus, 0) * var(--row-h)));
+  transition: transform 180ms var(--ease);
+  will-change: transform;
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  height: var(--row-h);
+  padding: 0 1rem 0 1.1rem;
+  opacity: 0.5;
+  color: var(--muted-strong);
+  transition: opacity 180ms ease, color 180ms ease;
+}
+.item::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 0;
+  background: var(--accent);
+  transform: translateY(-50%);
+  transition: height 180ms var(--ease);
+}
+.item.is-focused {
+  opacity: 1;
+  color: var(--text);
+}
+.item.is-focused::before {
+  height: 1.6rem;
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+.item__main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.item__title {
+  font-size: 1.12rem;
+  font-weight: 300;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.item.is-focused .item__title {
+  font-weight: 400;
+}
+.item__meta {
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+.item__value {
+  flex: 0 0 auto;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- empty categories (photo/music/video) ---- */
+
+.stub {
+  position: absolute;
+  left: var(--anchor);
+  top: 46vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  z-index: 1;
+}
+.stub__title {
+  font-size: 1.15rem;
+  font-weight: 300;
+  color: var(--muted-strong);
+}
+.stub__hint {
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+/* ---- auth gate + status screens ---- */
+
+.gate,
+.center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  text-align: center;
+  padding: 2rem;
+}
+.gate__brand {
+  font-size: 0.78rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.gate__title {
+  font-size: 1.6rem;
+  font-weight: 200;
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+.gate form {
+  display: flex;
+  gap: 0.6rem;
+}
+.gate input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hairline);
+  border-radius: 0.5rem;
+  padding: 0.7rem 1rem;
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+  letter-spacing: 0.3em;
+  text-align: center;
+  width: 12rem;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.gate input::placeholder {
+  color: var(--muted);
+  letter-spacing: 0.1em;
+}
+.gate input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.gate button,
+.center button {
+  background: var(--accent);
+  color: #04121f;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.7rem 1.3rem;
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: filter 160ms ease;
+}
+.gate button:hover,
+.center button:hover {
+  filter: brightness(1.08);
+}
+.gate button:focus-visible,
+.center button:focus-visible,
+.gate input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.gate__hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.gate__error,
+.center__error {
+  font-size: 0.85rem;
+  color: var(--danger);
+}
+.center__title {
+  font-size: 1.15rem;
+  font-weight: 300;
+  color: var(--muted-strong);
+}
+
+/* accessibility: respect reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .ribbon__track,
+  .column__track,
+  .cat__icon,
+  .cat__label,
+  .item,
+  .item::before {
+    transition-duration: 0.01ms !important;
+  }
+}
