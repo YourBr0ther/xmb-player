@@ -90,7 +90,7 @@ One container image (`game-session`), Ubuntu 22.04 base, NVIDIA runtime.
 - **State push:** session state broadcast to all connected browsers over WebSocket (launch on desktop → tablet shows "Now Playing" instantly).
 - **Signaling proxy:** proxies the WebRTC signaling WebSocket between browser and Selkies — single origin, no CORS, token gate covers everything.
 - **Auth:** one shared PIN in a k8s Secret; bearer token on every API/WS call. No user accounts.
-- **Persistence:** metadata + settings in a single SQLite (or JSON) file on `/config`. No database server.
+- **Persistence:** metadata + settings in JSON files on `/config` (single user, few hundred games — no database needed).
 
 ## Repo layout
 
@@ -104,7 +104,7 @@ psp_ui/
 └── docs/superpowers/specs/
 ```
 
-Images pushed to a registry the cluster can pull from (local registry, GHCR, or containerd import — chosen at implementation time).
+Images pushed to GHCR (free, k3s pulls directly with an imagePullSecret). If the cluster turns out to have a local registry already, we use that instead — a one-line kustomize change.
 
 ## Error handling
 
