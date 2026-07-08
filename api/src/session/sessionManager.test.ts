@@ -176,3 +176,19 @@ describe("SessionManager concurrency & subscription", () => {
     await expect(m.command("pause")).rejects.toThrow(/no active session/i);
   });
 });
+
+describe("SessionManager powerOff during startup", () => {
+  it("aborts a stuck in-flight start promptly (no busy wedge for the full timeout)", async () => {
+    // Pod never becomes ready; timeout is huge. Without the generation check
+    // inside waitForReady, start() would hold busy for 100s and this test would
+    // exceed vitest's default 5s timeout.
+    const cluster = fakeCluster([{ phase: "Pending", ready: false, hostIP: null }]);
+    const sup = fakeSupervisor();
+    const m = new SessionManager(cluster, sup, { pollMs: 1, timeoutMs: 100000 });
+    const starting = m.start(GAME);
+    await new Promise(r => setTimeout(r, 10)); // let it enter the polling loop
+    await m.powerOff();
+    await starting.catch(() => {});            // settles promptly, not after 100s
+    expect(m.snapshot().state).toBe("off");
+  });
+});

@@ -43,9 +43,13 @@ export class SessionManager {
     for (const cb of this.listeners) cb(this.snapshot());
   }
 
-  private async waitForReady(): Promise<string> {
+  private async waitForReady(gen: number): Promise<string> {
     const deadline = this.now() + this.timeoutMs;
     while (this.now() < deadline) {
+      // Bail immediately if this start() was superseded (e.g. powerOff mid-boot),
+      // rather than polling a doomed pod until the full timeout — which would
+      // otherwise hold `busy` and lock out new starts for the whole timeout.
+      if (gen !== this.generation) throw new Error("superseded");
       const st = await this.cluster.podStatus();
       if (st.phase === "Pending") this.set({ substate: "pulling/scheduling" });
       if (st.phase === "Running" && st.ready && st.hostIP) {
@@ -69,7 +73,7 @@ export class SessionManager {
         this.set({ substate: "scaling" });
         await this.cluster.scale(1);
       }
-      const hostIP = await this.waitForReady();
+      const hostIP = await this.waitForReady(gen);
       if (gen !== this.generation) return;            // superseded (e.g. powerOff)
       this.set({ substate: "loading-game" });
       await this.supervisor.startGame(hostIP, game.core, game.path);

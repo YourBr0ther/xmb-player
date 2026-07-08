@@ -10,10 +10,13 @@ metadata:
   name: xmb-api-game-session
   namespace: psp-xmb
 rules:
+  # Read the deployment (for status/reconciliation) but NOT patch it — the app
+  # only ever mutates the scale subresource below, so withholding `patch` here
+  # prevents the SA from changing the game-session image/env/command.
   - apiGroups: ["apps"]
     resources: ["deployments"]
     resourceNames: ["game-session"]
-    verbs: ["get", "list", "watch", "patch"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
     resources: ["deployments/scale"]
     resourceNames: ["game-session"]
