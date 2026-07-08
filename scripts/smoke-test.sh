@@ -5,6 +5,9 @@
 set -euo pipefail
 
 NS=psp-xmb
+# Ingress host for the Authelia-gated web UI. Set XMB_HOST to your own hostname;
+# the default is a placeholder so no site-specific host is baked into the repo.
+XMB_HOST="${XMB_HOST:-xmb.example.com}"
 ROM_URL="https://github.com/JeffRuLz/Celeste-Classic-GBA/releases/download/v1.2/Celeste.Classic.v1.2.Homebrew.gba"
 
 echo "--- scaling game-session to 1"
@@ -44,7 +47,7 @@ kubectl -n "${NS}" exec "${POD}" -- sh -c \
 
 echo
 echo "SMOKE TEST PASSED (automated checks)."
-echo "Browser (LAN):  https://xmb.example.com  (Authelia, then user 'psp' + basic-auth password)"
+echo "Browser (LAN):  https://${XMB_HOST}  (Authelia, then user 'psp' + basic-auth password)"
 echo "Browser (direct): http://${NODE_IP}:8080  (user 'psp' + basic-auth password)"
 echo "To stop:  curl -X DELETE http://${NODE_IP}:9090/game -H 'Authorization: Bearer <token>'"
 echo "To power off:  kubectl -n ${NS} scale deployment/game-session --replicas=0"

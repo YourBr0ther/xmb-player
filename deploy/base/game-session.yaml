@@ -32,7 +32,7 @@ spec:
             - name: SELKIES_ENCODER
               value: nvh264enc
             # Basic auth is disabled: the web UI is reached through Traefik at
-            # xmb.example.com, which Authelia already gates, so a second
+            # the ingress host, which Authelia already gates, so a second
             # prompt is redundant. NOTE: because the pod uses hostNetwork, the
             # direct path http://<node-ip>:8080 bypasses Authelia and is now
             # unauthenticated on the LAN. Acceptable for single-user LAN;

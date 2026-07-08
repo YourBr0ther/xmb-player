@@ -21,7 +21,7 @@ kubectl -n psp-xmb rollout status deploy/game-session
 TOKEN=$(kubectl -n psp-xmb get secret psp-xmb-auth -o jsonpath='{.data.supervisor-token}' | base64 -d)
 curl -X POST http://10.0.2.198:9090/game -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' -d '{"core":"mgba","rom":"/roms/gba/celeste.gba"}'
-# Play in a browser:  https://xmb.example.com  (Authelia, then basic-auth psp + password)
+# Play in a browser:  https://$XMB_HOST  (your ingress host; Authelia, then basic-auth psp + password)
 #   password:  kubectl -n psp-xmb get secret psp-xmb-auth -o jsonpath='{.data.basic-auth-password}' | base64 -d
 # Power off:  kubectl -n psp-xmb scale deploy/game-session --replicas=0
 ```
@@ -41,7 +41,7 @@ curl -X POST http://10.0.2.198:9090/game -H "Authorization: Bearer $TOKEN" \
 - **GPU device plugin not shipped here.** The cluster already runs a time-sliced
   NVIDIA device plugin managed in the `k3s_setup` repo (manifest 292). These
   manifests only *verify* GPU readiness — see `deploy/gpu/README.md`.
-- **Ingress lives in `k3s_setup`**, not `deploy/`: the `xmb.example.com`
+- **Ingress lives in `k3s_setup`**, not `deploy/`: the XMB ingress host's
   IngressRoute (Authelia-gated) is in `k3s_setup/manifests/custom-ingressroutes.yaml`
   and its restore ConfigMap, following the cluster's Traefik-restore convention.
 - **Dockerfile** needed three fixes vs. the plan's verbatim text: add
