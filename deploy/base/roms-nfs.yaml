@@ -1,0 +1,32 @@
+# deploy/base/roms-nfs.yaml
+# Static NFS PV/PVC exposing the existing ROM library on the NAS.
+# The ROMs/roms subdirectory is selected via volumeMounts subPath in the
+# Deployment (same pattern as sonarr in k3s_setup).
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: psp-xmb-roms
+spec:
+  capacity:
+    storage: 1Ti
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  nfs:
+    server: 192.168.0.2
+    path: /mnt/user/plex
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: roms
+  namespace: psp-xmb
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Ti
+  volumeName: psp-xmb-roms
+  storageClassName: ""

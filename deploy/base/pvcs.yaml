@@ -1,0 +1,26 @@
+# deploy/base/pvcs.yaml
+# k3s local-path PVCs. WaitForFirstConsumer: they stay Pending until the
+# game-session pod first schedules — that is normal, not an error.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: saves
+  namespace: psp-xmb
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: states
+  namespace: psp-xmb
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi
