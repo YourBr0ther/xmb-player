@@ -62,8 +62,10 @@ server {
         root /opt/gst-web/;
         index index.html index.htm;
     }
-    location /health { proxy_buffering off; proxy_pass http://localhost:8081; }
-    location /turn   { proxy_buffering off; proxy_pass http://localhost:8081; }
+    # selkies' web server (python websockets) rejects HTTP/1.0, which is
+    # nginx's default proxy version — always speak 1.1 to it.
+    location /health { proxy_http_version 1.1; proxy_buffering off; proxy_pass http://localhost:8081; }
+    location /turn   { proxy_http_version 1.1; proxy_buffering off; proxy_pass http://localhost:8081; }
     location ~ ^/(ws|webrtc/signalling)\$ {
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
