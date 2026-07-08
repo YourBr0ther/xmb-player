@@ -185,6 +185,31 @@ def test_post_game_bad_json_400(server):
     assert exc.value.code == 400
 
 
+def test_post_game_non_object_json_400(server):
+    status, body = call(server, "POST", "/game", [1, 2])
+    assert status == 400
+    assert "error" in body
+
+
+def test_post_game_launch_failure_500():
+    def bad_binary(core, rom):
+        return ["definitely-not-a-real-binary-xyz"]
+
+    session = GameSession(command_builder=bad_binary)
+    srv = make_server(session, token="", port=0)
+    import threading
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    status, body = call(srv, "POST", "/game",
+                        {"core": "mgba", "rom": "/tmp/x.gba"}, token=None)
+    assert status == 500
+    assert "error" in body
+    # a failed launch must not leave status claiming "running"
+    status, body = call(srv, "GET", "/status", token=None)
+    assert status == 200
+    assert body["state"] != "running"
+    srv.shutdown()
+
+
 def test_post_game_missing_core_404():
     session = GameSession()  # real build_command -> validates paths
     srv = make_server(session, token="", port=0)

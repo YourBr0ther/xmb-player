@@ -31,6 +31,13 @@ def build_command(core, rom, cores_dir=None):
     ]
 
 
+class LaunchError(RuntimeError):
+    """Raised when the game process fails to launch (e.g. missing binary).
+
+    Distinct from the FileNotFoundError raised by command validation so
+    the HTTP layer can report 500 instead of 404."""
+
+
 class GameSession:
     """Owns at most one running RetroArch process."""
 
@@ -45,9 +52,13 @@ class GameSession:
         cmd = self._build(core, rom)  # may raise FileNotFoundError
         with self._lock:
             self._terminate_locked()
-            self._proc = subprocess.Popen(cmd)
-            self._game = {"core": core, "rom": rom}
+            self._game = None
             self._crashed = False
+            try:
+                self._proc = subprocess.Popen(cmd)
+            except OSError as e:
+                raise LaunchError(f"failed to launch: {e}") from e
+            self._game = {"core": core, "rom": rom}
 
     def stop(self):
         with self._lock:
@@ -113,12 +124,14 @@ def make_server(session, token="", port=9090):
                 length = int(self.headers.get("Content-Length", 0))
                 body = json.loads(self.rfile.read(length))
                 core, rom = body["core"], body["rom"]
-            except (ValueError, KeyError, json.JSONDecodeError):
+            except (ValueError, KeyError, TypeError):
                 return self._send(400, {"error": "expected JSON {core, rom}"})
             try:
                 session.start(core, rom)
             except FileNotFoundError as e:
                 return self._send(404, {"error": str(e)})
+            except LaunchError as e:
+                return self._send(500, {"error": str(e)})
             return self._send(200, session.status())
 
         def do_DELETE(self):
