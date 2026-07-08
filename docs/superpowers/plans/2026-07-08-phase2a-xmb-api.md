@@ -1176,8 +1176,11 @@ it("sends a snapshot on connect and pushes transitions", async () => {
   const port = await listen();
   const ws = new WebSocket(`ws://127.0.0.1:${port}/api/ws?token=tok`);
   const messages: any[] = [];
-  await new Promise<void>(res => ws.on("open", () => res()));
+  // Attach the message listener BEFORE awaiting "open": on loopback the initial
+  // snapshot frame is coalesced with the 101 upgrade, so a listener attached
+  // after "open" would miss it. (A real client sets onmessage synchronously too.)
   ws.on("message", d => messages.push(JSON.parse(d.toString())));
+  await new Promise<void>(res => ws.on("open", () => res()));
   await new Promise(r => setTimeout(r, 20)); // receive initial snapshot
   session.emit({ state: "in-game", game: null, node: "10.0.2.198", since: 1 });
   await new Promise(r => setTimeout(r, 20));
@@ -1560,7 +1563,10 @@ Run:
 ```bash
 export KUBECONFIG=~/.kube/k3s-config
 kubectl -n psp-xmb patch secret psp-xmb-auth --type merge \
-  -p "{\"data\":{\"xmb-api-token\":\"$(openssl rand -hex 24 | base64)\"}}"
+  -p "{\"data\":{\"xmb-api-token\":\"$(openssl rand -hex 24 | tr -d '\n' | base64)\"}}"
+  # NOTE: `tr -d '\n'` is essential — openssl appends a newline, and base64ing
+  # it bakes a trailing \n into the token. The server env then has 49 bytes but
+  # any client strips it to 48 → length mismatch → 401 on every request.
 kubectl apply -k deploy/base
 kubectl -n psp-xmb rollout status deploy/xmb-api --timeout=180s
 kubectl -n psp-xmb get deploy xmb-api,pvc xmb-api-config,sa xmb-api
