@@ -676,10 +676,14 @@ export class SessionManager {
     if (this.busy) throw new Error("session busy");
     this.busy = true;
     try {
-      this.set({ state: "starting", substate: "scaling",
+      // Emit a bare "starting" transition (no substate) first so subscribers
+      // that project `substate ?? state` observe the state entry, then the
+      // "scaling" substate only when we actually scale.
+      this.set({ state: "starting", substate: undefined,
         game: { id: game.id, title: game.title, system: game.system }, error: undefined });
       const st = await this.cluster.podStatus();
       if (!(st.phase === "Running" && st.ready)) {
+        this.set({ substate: "scaling" });
         await this.cluster.scale(1);
       }
       const hostIP = await this.waitForReady();
